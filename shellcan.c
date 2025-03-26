@@ -1,5 +1,5 @@
 //PERF: Added builtin commands
-//TODO: Add Keyboard Shortcuts
+//TODO: Add Keyboard Shortcuts (pure C only)
 //TODO: Add autocompletion
 
 #include <signal.h>
@@ -12,6 +12,10 @@
 #include <unistd.h>
 #include <curses.h>
 #include <pwd.h>
+#include <readline/history.h>
+#include <readline/readline.h>
+
+#include "auto-comp.h"
 
 //NOTE:  TERM_COLORS FOR STRING LITERALS
 #define TERM_NRM "\x1B[0m"
@@ -67,17 +71,20 @@ char *sh_get_usr_name();
 int sh_help(char ** args);
 int sh_cd(char ** args);
 int sh_exit(char ** args);
+int sh_history(char **args);
 
 char *builtins_str[] = {
   "help",
   "cd",
-  "exit"
+  "exit",
+  "history"
 }; 
 
 int (*builtins_func[]) (char **) = {
   &sh_help,
   &sh_cd,
-  &sh_exit
+  &sh_exit,
+  &sh_history
 };
 
 int num_builtins(){
@@ -105,7 +112,7 @@ int sh_cd(char **args){
 }
 
 int sh_help(char ** args){
-  printf(TERM_YEL(" ---------------- Hakcan's SHELL ---------------\n\n"));
+  printf(TERM_YEL(" ---------------- SHELLCAN ---------------\n\n"));
   printf(TERM_GRN("This is a basic shell written in pure C for educational purposes...\n"));
   printf("Built -In Commands:\n");
 
@@ -114,6 +121,17 @@ int sh_help(char ** args){
   }
   printf("\n\n");
 
+  return EXIT_SUCCESS;
+}
+
+int sh_history(char **args) {
+  printf("asğdpl");
+    HIST_ENTRY **history_l = history_list();
+    if (history_l) {
+        for (int i = 0; history_l[i]; i++) {
+          printf("%d: %s\n", i + history_base, history_l[i]->line);
+        }
+    }
   return EXIT_SUCCESS;
 }
 
@@ -130,19 +148,47 @@ char *sh_get_usr_name(){
   return pw->pw_name;
 }
 
-char *sh_get_line() {
+char *sh_get_line(char *wdir) {
   char *line = NULL;
-  size_t bufsize = 0;
-  if (getline(&line, &bufsize, stdin) == -1) {
-    if (feof(stdin)) {
-      exit(EXIT_SUCCESS);
-    } else {
-      perror("readline");
-      exit(EXIT_FAILURE);
-    }
+  line = readline("");
+
+  if (line == NULL) {
+    SH_ERR("readline failed");  
+    exit(EXIT_FAILURE);
   }
   return line;
 }
+/*
+int main() {
+    rl_attempted_completion_function = custom_completion; // Enable auto-completion
+
+    char *input;
+    while ((input = readline("mysh> ")) != NULL) {
+        if (*input) add_history(input); // Save command history
+
+        char **args = sh_parse(input);
+        if (args[0] != NULL) {
+            int executed = 0;
+            for (int i = 0; i < num_builtins(); i++) {
+                if (strcmp(args[0], builtins_str[i]) == 0) {
+                    (*builtins_func[i])(args);
+                    executed = 1;
+                    break;
+                }
+            }
+            if (!executed) {
+                sh_exec(args);
+            }
+        }
+
+        free(input);
+        free(args);
+    }
+
+    return 0;
+}
+
+*/
 
 char **sh_parse(char *buff) {
   int bufsize = SH_BUFSIZE;
@@ -215,17 +261,19 @@ void sh_loop() {
   char wdir[1024];
   char *buffer;
   char **args;
-
   int status = EXIT_SUCCESS;
 
+  rl_attempted_completion_function = custom_completion;
+  
   do {
     //NOTE:  Get current working dir moruk
     if (getcwd(wdir, sizeof(wdir)) == NULL) {
       SH_ERR("getcwd failed");
     }
+    
     sh_color(CYN, wdir, wdir, sizeof(wdir));
-    printf("%s\n%s", wdir, TERM_BLU("shellcan > "));
-    buffer = sh_get_line();
+    printf("\n%s\n%s", wdir, TERM_BLU(">>>  "));
+    buffer = sh_get_line(wdir);
     args = sh_parse(buffer);
     status = sh_launch(args);
     
