@@ -1,21 +1,15 @@
-//PERF: Added builtin commands
-//TODO: Add Keyboard Shortcuts (pure C only)
-//TODO: Add autocompletion
-
-#include <signal.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 #include <curses.h>
 #include <pwd.h>
 #include <readline/history.h>
 #include <readline/readline.h>
 
 #include "auto-comp.h"
+#include "config.h"
 
 //NOTE:  TERM_COLORS FOR STRING LITERALS
 #define TERM_NRM "\x1B[0m"
@@ -27,9 +21,11 @@
 #define TERM_CYN(x) "\x1B[36m" x TERM_NRM
 #define TERM_WHT(x) "\x1B[37m" x TERM_NRM
 
-#define SH_DELIM " \t\r\n"
-#define SH_ERR(err) fprintf(stderr, TERM_RED("\nSHELLCAN_ERROR: " err "\n"))
 #define SH_BUFSIZE 64
+#define SH_DELIM " \t\r\n"
+#define SH_ERR(err) fprintf(stderr, TERM_RED("\nSH_ERR: " err "\n"))
+
+#define DEBUG_CONFIG 0
 
 //NOTE: Color options for stdout
 enum TERM_COLORS {
@@ -78,7 +74,7 @@ char *builtins_str[] = {
   "cd",
   "exit",
   "history"
-}; 
+};
 
 int (*builtins_func[]) (char **) = {
   &sh_help,
@@ -101,13 +97,13 @@ int sh_cd(char **args){
   }
   if(args[1] == NULL){
     strcat(usr_path, usr_name);
-    chdir(usr_path); 
+    chdir(usr_path);
     return EXIT_SUCCESS;
-  } 
+  }
   if(chdir(args[1]) != 0){
     return EXIT_SUCCESS;
   }
-  
+
   return EXIT_SUCCESS;
 }
 
@@ -153,42 +149,11 @@ char *sh_get_line(char *wdir) {
   line = readline("");
 
   if (line == NULL) {
-    SH_ERR("readline failed");  
+    SH_ERR("readline failed");
     exit(EXIT_FAILURE);
   }
   return line;
 }
-/*
-int main() {
-    rl_attempted_completion_function = custom_completion; // Enable auto-completion
-
-    char *input;
-    while ((input = readline("mysh> ")) != NULL) {
-        if (*input) add_history(input); // Save command history
-
-        char **args = sh_parse(input);
-        if (args[0] != NULL) {
-            int executed = 0;
-            for (int i = 0; i < num_builtins(); i++) {
-                if (strcmp(args[0], builtins_str[i]) == 0) {
-                    (*builtins_func[i])(args);
-                    executed = 1;
-                    break;
-                }
-            }
-            if (!executed) {
-                sh_exec(args);
-            }
-        }
-
-        free(input);
-        free(args);
-    }
-
-    return 0;
-}
-
-*/
 
 char **sh_parse(char *buff) {
   int bufsize = SH_BUFSIZE;
@@ -229,12 +194,12 @@ int sh_exec(char **args) {
     SH_ERR("Fork failed");
     return EXIT_FAILURE;
   }
-  if (pid == 0) { //NOTE:CHILD MORUK
+  if (pid == 0) {
     if (execvp(args[0], args) == -1) {
-      perror(TERM_RED("shellcan: "));
+      SH_ERR(TERM_RED("Command not found !"));
       exit(EXIT_FAILURE);
     }
-  } else { //* NOTE: Parent MORUK
+  } else {
     do {
       wpid = waitpid(pid, &status, WUNTRACED);
     } while (!WIFEXITED(status) && !WIFSIGNALED(status));
@@ -242,16 +207,28 @@ int sh_exec(char **args) {
   return EXIT_SUCCESS;
 }
 
-int sh_launch(char **args)
-{
+int sh_launch(char **args){
   if (args[0] == NULL) {
     return EXIT_SUCCESS;
   }
 
+  //Check whether the command is a builtin one
   for (int i = 0; i < num_builtins(); i++) {
     if (strcmp(args[0], builtins_str[i]) == 0) {
       return (*builtins_func[i])(args);
     }
+  }
+
+  //TODO: Check whether the command is an alias from the .shcanrs
+  printf("args[0}: '%s' \n",args[0]);
+  char **solved = resolve_alias(args[0]);
+  if (solved != NULL) {
+    for(int i = 0; i < 2 ; i++){
+        printf("Resolved alias[%d] -> %s\n", i,solved[i]);
+    }
+    sh_launch(solved);
+    free(solved);
+    return EXIT_SUCCESS;
   }
 
   return sh_exec(args);
@@ -263,33 +240,34 @@ void sh_loop() {
   char **args;
   int status = EXIT_SUCCESS;
 
+  //AUTO COMPLETION FUNC
   rl_attempted_completion_function = custom_completion;
-  
+
   do {
-    //NOTE:  Get current working dir moruk
     if (getcwd(wdir, sizeof(wdir)) == NULL) {
       SH_ERR("getcwd failed");
     }
-    
-    sh_color(CYN, wdir, wdir, sizeof(wdir));
-    printf("\n%s\n%s", wdir, TERM_BLU(">>>  "));
+
+    sh_color(BLUE, wdir, wdir, sizeof(wdir));
+    printf("\n%s %s\n", wdir, TERM_GRN(">>>  "));
     buffer = sh_get_line(wdir);
     args = sh_parse(buffer);
     status = sh_launch(args);
-    
-    /*
-    free(buffer);
-    for (int i = 0; args[i] != NULL; i++) {
-      free(args[i]);
-    }
-    free(args); 
-    */
 
   } while (!status);
 }
 
 int main(void) {
-  system("clear");
+    load_config();
+  /*
+  */
+#if DEBUG_CONFIG == 1
+  for (int i = 0; i < alias_count; i++) {
+    printf("Alias: '%s' = '%s'\n", aliases[i].name, aliases[i].command);
+  }
+#endif
+  //system("clear");
   sh_loop();
+
   return EXIT_SUCCESS;
 }

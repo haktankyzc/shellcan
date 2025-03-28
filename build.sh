@@ -7,6 +7,6 @@ CURSES_FLAGS="-lcurses"
 READLINE_FLAGS="-lreadline"
 
 TARGET="shellcan"
-SRC="shellcan.c"
+SRC="./src/shellcan.c"
 
 gcc $CFLAGS $CURSES_FLAGS $READLINE_FLAGS -o $TARGET $SRC

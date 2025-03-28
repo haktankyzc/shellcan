@@ -1,0 +1,4 @@
+alias .. = "cd .."
+alias l = "ls -la"
+alias mk = "echo mkdir"
+alias hako = "cd /home/hako/Desktop/computer_science"

@@ -72,7 +72,7 @@ char *file_generator(const char *text, int state) {
     static int file_count = 0;
 
     if (state == 0) {
-        if (namelist) { // Önceki belleği temizle
+        if (namelist) {
             for (int i = 0; i < file_count; i++)
                 free(namelist[i]);
             free(namelist);
@@ -84,13 +84,12 @@ char *file_generator(const char *text, int state) {
     while (index < file_count) {
         struct dirent *entry = namelist[index++];
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
-            continue; // "." ve ".." dizinlerini atla
+            continue;
 
         if (strncmp(entry->d_name, text, strlen(text)) == 0) {
             struct stat path_stat;
             stat(entry->d_name, &path_stat);
 
-            // Eğer bir dizinse, sonuna "/" ekleyelim
             if (S_ISDIR(path_stat.st_mode)) {
                 char *dir_name = malloc(strlen(entry->d_name) + 2);
                 sprintf(dir_name, "%s/", entry->d_name);
@@ -116,7 +115,7 @@ char *git_arg_generator(const char *text, int state) {
     return NULL;
 }
 
-char **custom_completion(const char *text, int start, int end) {
+extern char **custom_completion(const char *text, int start, int end) {
     if (start == 4 && !strncmp(rl_line_buffer, "git ", 4)) {
         return rl_completion_matches(text, git_arg_generator);
     } else if (start > 0) {
@@ -125,21 +124,4 @@ char **custom_completion(const char *text, int start, int end) {
     return rl_completion_matches(text, command_generator);
 }
 
-
-/*
- 
-int main() {
-    rl_attempted_completion_function = custom_completion;
-    char *input;
-
-    while ((input = readline("mysh> ")) != NULL) {
-        if (*input) add_history(input);
-        printf("Executed: %s\n", input);
-        free(input);
-    }
-    return 0;
-}
-
- */
-
-#endif //AUTO_COMP 
+#endif //AUTO_COMP
