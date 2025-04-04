@@ -7,19 +7,12 @@
 #include <pwd.h>
 #include <readline/history.h>
 #include <readline/readline.h>
+#include <sys/ioctl.h>
 
 #include "auto-comp.h"
 #include "config.h"
-
-//NOTE:  TERM_COLORS FOR STRING LITERALS
-#define TERM_NRM "\x1B[0m"
-#define TERM_RED(x) "\x1B[31m" x TERM_NRM
-#define TERM_BLU(x) "\x1B[34m" x TERM_NRM
-#define TERM_GRN(x) "\x1B[32m" x TERM_NRM
-#define TERM_YEL(x) "\x1B[33m" x TERM_NRM
-#define TERM_MAG(x) "\x1B[35m" x TERM_NRM
-#define TERM_CYN(x) "\x1B[36m" x TERM_NRM
-#define TERM_WHT(x) "\x1B[37m" x TERM_NRM
+#include "currentTime.h"
+#include "themes.h"
 
 #define SH_BUFSIZE 64
 #define SH_DELIM " \t\r\n"
@@ -63,11 +56,10 @@ void sh_color(enum TERM_COLORS term_color, char *text, char *output, int output_
 char *sh_get_usr_name();
 
 // NOTE: Builtin Commands
-
-int sh_help(char ** args);
 int sh_cd(char ** args);
-int sh_exit(char ** args);
-int sh_history(char **args);
+int sh_help(char ** args); //Args is unused...
+int sh_exit(char ** args); //Args is unused...
+int sh_history(char **args); //Args is unused...
 
 char *builtins_str[] = {
   "help",
@@ -92,7 +84,7 @@ int sh_cd(char **args){
   const char *usr_name = sh_get_usr_name();
 
   if(args[0] == NULL){
-    SH_ERR("empty args (from cd)");
+    SH_ERR("empty args err(from cd)");
     return EXIT_FAILURE;
   }
   if(args[1] == NULL){
@@ -108,14 +100,18 @@ int sh_cd(char **args){
 }
 
 int sh_help(char ** args){
-  printf(TERM_YEL(" ---------------- SHELLCAN ---------------\n\n"));
-  printf(TERM_GRN("This is a basic shell written in pure C for educational purposes...\n"));
-  printf("Built -In Commands:\n");
+  printf(TERM_YEL(" -----------------------*** SHELLCAN ***----------------------\n\n"));
+  printf(TERM_BLU("'This is a basic shell written in pure C for educational purposes...'\n\n"));
+  printf(TERM_MAG("Builtin Commands:\n"));
 
   for(int i = 0; i < num_builtins(); i++){
-    printf(" * %s\n",builtins_str[i]);
+    printf(TERM_GRN(" * %s\n"),builtins_str[i]);
   }
-  printf("\n\n");
+  printf(TERM_MAG("\nKnown aliases from the config file:\n"));
+  for (int i = 0; i < alias_count; i++) {
+    printf(TERM_YEL("'%s' = '%s'\n"), aliases[i].name, aliases[i].command);
+  }
+  printf("\n");
 
   return EXIT_SUCCESS;
 }
@@ -212,26 +208,52 @@ int sh_launch(char **args){
     return EXIT_SUCCESS;
   }
 
-  //Check whether the command is a builtin one
+  //*Check whether the command is a builtin one
   for (int i = 0; i < num_builtins(); i++) {
     if (strcmp(args[0], builtins_str[i]) == 0) {
       return (*builtins_func[i])(args);
     }
   }
 
-  //TODO: Check whether the command is an alias from the .shcanrs
-  printf("args[0}: '%s' \n",args[0]);
+  //printf("args[0}: '%s' \n",args[0]);
+  //* Check whether the command is an alias from the config file
   char **solved = resolve_alias(args[0]);
   if (solved != NULL) {
+#if DEBUG_CONFIG == 1
     for(int i = 0; i < 2 ; i++){
-        printf("Resolved alias[%d] -> %s\n", i,solved[i]);
+       printf("Resolved alias[%d] -> %s\n", i,solved[i]);
     }
+#endif
     sh_launch(solved);
     free(solved);
     return EXIT_SUCCESS;
   }
 
   return sh_exec(args);
+}
+
+void sh_print_prompt(char *wdir) {
+
+  struct winsize w;
+  ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+  int term_width = w.ws_col; 
+
+  time_t t = time(NULL);
+  struct tm *tm_info = localtime(&t);
+  char time_str[13];
+  strftime(time_str, sizeof(time_str), "at %H:%M:%S", tm_info); 
+  //sh_color(MAG, time_str,time_str,sizeof(time_str));
+  
+  char prompt[256];
+  snprintf(prompt, sizeof(prompt), "%s %s", wdir, TERM_GRN(">>>  "));
+
+  int prompt_len = strlen(prompt);
+  int time_len = strlen(time_str);
+  int spaces = term_width - (prompt_len + time_len);
+
+  if (spaces < 1) spaces = 1;
+
+  printf("\n%s%*s%s\n", prompt, spaces, "", time_str);
 }
 
 void sh_loop() {
@@ -244,12 +266,14 @@ void sh_loop() {
   rl_attempted_completion_function = custom_completion;
 
   do {
+    // *SH_PRINT_PROMPT func
     if (getcwd(wdir, sizeof(wdir)) == NULL) {
       SH_ERR("getcwd failed");
     }
-
     sh_color(BLUE, wdir, wdir, sizeof(wdir));
-    printf("\n%s %s\n", wdir, TERM_GRN(">>>  "));
+    //printf("\n%s %s\n", wdir, TERM_GRN(">>>  "));
+    sh_print_prompt(wdir);
+    //////////*
     buffer = sh_get_line(wdir);
     args = sh_parse(buffer);
     status = sh_launch(args);
@@ -258,7 +282,8 @@ void sh_loop() {
 }
 
 int main(void) {
-    load_config();
+  load_usr_conf_path();
+  load_config();
   /*
   */
 #if DEBUG_CONFIG == 1
@@ -267,7 +292,7 @@ int main(void) {
   }
 #endif
   //system("clear");
+  
   sh_loop();
-
   return EXIT_SUCCESS;
 }
