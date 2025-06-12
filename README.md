@@ -17,7 +17,7 @@ alias l  = "ls -la"
 
 
 ## Building Project
-```sh
+```shell
 chmod +x shellcan.c
 ./build.sh
 ```
