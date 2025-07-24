@@ -1,6 +1,6 @@
 # Shellcan.c
 
-Basic shell written in C for educational purposes
+Basic shell written in C for educational purposes (C training :))
 
 <img title="Preview" src="./assets/preview.png" style="border-radius:50%">
 
